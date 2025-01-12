@@ -94,6 +94,9 @@
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
             z-index: 50;
             display: none;
+            max-height: 16rem;
+            /* Adjust as needed */
+            overflow-y: auto;
         }
 
         .custom-select-option {
@@ -174,6 +177,18 @@
             scrollbar-width: none;
             -ms-overflow-style: none;
         }
+
+        /* Hide scrollbars but allow scrolling in the dropdown */
+        .custom-select-options::-webkit-scrollbar {
+            display: none;
+        }
+
+        .custom-select-options {
+            scrollbar-width: none;
+            /* Firefox */
+            -ms-overflow-style: none;
+            /* IE/Edge */
+        }
     </style>
 </head>
 
@@ -192,114 +207,104 @@
         </div>
 
         <!-- Enhanced Header Background -->
-        <header class="fixed top-0 left-0 right-0 z-50 bg-black/95 backdrop-blur-xl border-b border-white/5">
-            <div class="container mx-auto px-4 py-6">
-                <!-- Logo and Navigation -->
-                <div class="flex justify-between items-center mb-10">
-                    <h1 class="logo-text text-4xl md:text-5xl font-bold tracking-tight">
-                        <a href="/" class="flex items-center gap-3 hover:scale-105 transition-transform">
-                            <i class="fas fa-film text-primary"></i>
-                            <span
-                                class="bg-clip-text text-transparent bg-gradient-to-r from-primary via-secondary to-accent">
-                                CineMate
-                            </span>
-                        </a>
-                    </h1>
-                </div>
+        <header class="fixed top-0 left-0 right-0 z-50 bg-black/90 backdrop-blur-xl border-b border-white/5">
+            <div class="container mx-auto px-4 py-2 flex flex-wrap items-center justify-between">
+                <!-- Logo: smaller size with less margin -->
+                <h1 class="text-2xl font-bold tracking-tight flex-shrink-0">
+                    <a href="/" class="flex items-center gap-2 hover:scale-105 transition-transform">
+                        <i class="fas fa-film text-primary"></i>
+                        <span
+                            class="bg-clip-text text-transparent bg-gradient-to-r from-primary via-secondary to-accent">
+                            CineMate
+                        </span>
+                    </a>
+                </h1>
 
-                <!-- Search and Filters -->
-                <div class="space-y-6 max-w-5xl mx-auto">
-                    <!-- Search Form -->
-                    <form id="search-form" class="relative group transform transition-all">
-                        <input type="text" id="search-input" class="w-full px-6 py-4 rounded-2xl 
-                                      bg-slate-800/50 backdrop-blur-xl
-                                      border border-slate-700/50 
-                                      focus:border-primary/50 focus:ring-2 focus:ring-primary/20
-                                    focus:border-primary/50 focus:ring-2 focus:ring-primary/20
-                                    text-white placeholder-slate-400
-                                    transition-all duration-300
-                                    text-sm
-                                    hover:border-slate-600" placeholder="Search for movies...">
-                        <button type="submit" class="absolute right-3 top-1/2 -translate-y-1/2 
-                                    text-slate-400 hover:text-primary transition-colors duration-300">
+                <!-- Search and Filters in a single row -->
+                <div class="flex items-center gap-4 w-full mt-4 md:mt-0 md:w-auto">
+                    <form id="search-form" class="relative flex-grow min-w-[200px] max-w-[300px]">
+                        <input type="text" id="search-input" class="w-full px-4 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-white
+                                   placeholder-slate-400 focus:border-primary/50 focus:ring-primary/20
+                                   transition-all text-sm" placeholder="Search for movies...">
+                        <button type="submit"
+                            class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-primary">
                             <i class="fas fa-search"></i>
                         </button>
-                </div>
-                </form>
+                    </form>
 
-                <!-- Filters -->
-                <div class="flex items-center gap-2">
-                    <!-- Genre Filter -->
-                    <div class="custom-select-wrapper" id="genre-wrapper">
-                        <div class="custom-select" id="genre-select">
-                            <span class="selected-option text-slate-200 text-sm">All Genres</span>
-                            <i class="fas fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                            <div class="custom-select-options">
-                                <div class="custom-select-option" data-value="">All Genres</div>
+                    <div class="flex items-center gap-2">
+                        <!-- Genre -->
+                        <div class="custom-select-wrapper" id="genre-wrapper">
+                            <div class="custom-select" id="genre-select">
+                                <span class="selected-option text-slate-200 text-sm">All Genres</span>
+                                <i
+                                    class="fas fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                                <div class="custom-select-options">
+                                    <div class="custom-select-option" data-value="">All Genres</div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Sort -->
+                        <div class="custom-select-wrapper" id="sort-wrapper">
+                            <div class="custom-select" id="sort-select">
+                                <span class="selected-option text-slate-200 text-sm">Most Popular</span>
+                                <i
+                                    class="fas fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                                <div class="custom-select-options">
+                                    <div class="custom-select-option" data-value="popularity.desc">Most Popular</div>
+                                    <div class="custom-select-option" data-value="vote_average.desc">Highest Rated</div>
+                                    <div class="custom-select-option" data-value="release_date.desc">Latest Releases
+                                    </div>
+                                    <div class="custom-select-option" data-value="revenue.desc">Box Office Hits</div>
+                                </div>
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </header>
 
-                    <!-- Sort Filter -->
-                    <div class="custom-select-wrapper" id="sort-wrapper">
-                        <div class="custom-select" id="sort-select">
-                            <span class="selected-option text-slate-200 text-sm">Most Popular</span>
-                            <i class="fas fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                            <div class="custom-select-options">
-                                <div class="custom-select-option" data-value="popularity.desc">Most Popular</div>
-                                <div class="custom-select-option" data-value="vote_average.desc">Highest Rated</div>
-                                <div class="custom-select-option" data-value="release_date.desc">Latest Releases</div>
-                                <div class="custom-select-option" data-value="revenue.desc">Box Office Hits</div>
-                            </div>
-                        </div>
+        <!-- Adjust spacer below header -->
+        <div class="h-[56px]"></div>
+
+        <!-- Enhanced Main Content -->
+        <main class="container mx-auto px-4 py-12 relative animate-fadeIn">
+            <!-- Enhanced Background Decorations -->
+            <div class="fixed inset-0 pointer-events-none overflow-hidden">
+                <div class="bg-decoration bg-decoration-1"></div>
+                <div class="bg-decoration bg-decoration-2"></div>
+            </div>
+
+            <!-- Movie Grid with Enhanced Animation -->
+            <div id="movie-container"
+                class="relative z-10 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 animate-fadeIn">
+                <!-- Movies will be loaded here -->
+            </div>
+
+            <!-- Enhanced Pagination -->
+            <div id="pagination" class="mt-12 flex justify-center gap-2 text-base relative z-10">
+                <div
+                    class="inline-flex rounded-xl shadow-lg bg-slate-800/30 backdrop-blur-md p-2 border border-slate-700/50">
+                    <!-- Pagination will be populated here -->
+                </div>
+            </div>
+        </main>
+
+        <!-- Enhanced Modal Structure -->
+        <div id="movie-modal" class="fixed inset-0 z-50 items-center justify-center bg-slate-900/95 backdrop-blur-xl">
+            <div class="container max-w-5xl mx-auto p-4 h-full flex items-center">
+                <div
+                    class="modal-content w-full bg-slate-800/95 rounded-2xl shadow-2xl relative overflow-hidden backdrop-blur-xl border border-slate-700/50">
+                    <button
+                        class="close absolute top-3 right-3 w-8 h-8 bg-primary/90 hover:bg-primary text-white rounded-full flex items-center justify-center z-10 text-sm">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    <div id="modal-details" class="max-h-[80vh] overflow-y-auto p-4 md:p-6 scroll-smooth">
+                        <!-- Modal content will be populated by JavaScript -->
                     </div>
                 </div>
             </div>
-    </div>
-    </div>
-    </header>
-
-    <!-- Add this div after the header to prevent content from hiding under fixed header -->
-    <div class="h-[120px]"></div> <!-- Adjust the height based on your header height -->
-
-    <!-- Enhanced Main Content -->
-    <main class="container mx-auto px-4 py-12 relative animate-fadeIn">
-        <!-- Enhanced Background Decorations -->
-        <div class="fixed inset-0 pointer-events-none overflow-hidden">
-            <div class="bg-decoration bg-decoration-1"></div>
-            <div class="bg-decoration bg-decoration-2"></div>
         </div>
-
-        <!-- Movie Grid with Enhanced Animation -->
-        <div id="movie-container"
-            class="relative z-10 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 animate-fadeIn">
-            <!-- Movies will be loaded here -->
-        </div>
-
-        <!-- Enhanced Pagination -->
-        <div id="pagination" class="mt-12 flex justify-center gap-2 text-base relative z-10">
-            <div
-                class="inline-flex rounded-xl shadow-lg bg-slate-800/30 backdrop-blur-md p-2 border border-slate-700/50">
-                <!-- Pagination will be populated here -->
-            </div>
-        </div>
-    </main>
-
-    <!-- Enhanced Modal Structure -->
-    <div id="movie-modal" class="fixed inset-0 z-50 items-center justify-center bg-slate-900/95 backdrop-blur-xl">
-        <div class="container max-w-5xl mx-auto p-4 h-full flex items-center">
-            <div
-                class="modal-content w-full bg-slate-800/95 rounded-2xl shadow-2xl relative overflow-hidden backdrop-blur-xl border border-slate-700/50">
-                <button
-                    class="close absolute top-3 right-3 w-8 h-8 bg-primary/90 hover:bg-primary text-white rounded-full flex items-center justify-center z-10 text-sm">
-                    <i class="fas fa-times"></i>
-                </button>
-                <div id="modal-details" class="max-h-[80vh] overflow-y-auto p-4 md:p-6 scroll-smooth">
-                    <!-- Modal content will be populated by JavaScript -->
-                </div>
-            </div>
-        </div>
-    </div>
     </div>
 
     <script src="script.js"></script>
