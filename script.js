@@ -258,6 +258,27 @@ async function displayMovies(movies, append = false) {
             </div>
         `;
 
+        const streamingCorner = document.createElement('div');
+        streamingCorner.className = 'streaming-corner';
+        const orderedProviders = [
+            ...(allProviders.stream || []),
+            ...(allProviders.free || []),
+            ...(allProviders.ads || []),
+            ...(allProviders.rent || []),
+            ...(allProviders.buy || [])
+        ];
+
+        streamingCorner.innerHTML = orderedProviders.slice(0, 4).map(provider => `
+            <img 
+                src="${IMAGE_BASE_URL}${provider.logo_path}" 
+                alt="${provider.provider_name}" 
+                title="${provider.provider_name}" />
+        `).join('');
+
+        movieCard
+            .querySelector('.relative.aspect-\\[2\\/3\\]')
+            .appendChild(streamingCorner);
+
         movieCard.addEventListener('click', () => showMovieDetails(movie.id));
         movieContainer.appendChild(movieCard);
     });

@@ -189,6 +189,64 @@
             -ms-overflow-style: none;
             /* IE/Edge */
         }
+
+        .movie-card {
+            /* ...existing code... */
+            position: relative;
+            transition: transform 0.3s ease;
+        }
+
+        .movie-card:hover {
+            transform: scale(1.05);
+            z-index: 10;
+        }
+
+        .movie-card-overlay {
+            /* ...existing code... */
+            opacity: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            transition: opacity 0.3s ease;
+            position: absolute;
+            inset: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .movie-card:hover .movie-card-overlay {
+            opacity: 1;
+        }
+
+        .streaming-corner {
+            position: absolute;
+            bottom: 0.5rem;
+            right: 0.5rem;
+            display: flex;
+            gap: 0.25rem;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .movie-card:hover .streaming-corner {
+            opacity: 1;
+        }
+
+        /* Hide the main watch info so only corner icons show */
+        .movie-card-overlay .watch-info {
+            display: none;
+        }
+
+        .streaming-corner img {
+            width: 24px;
+            height: 24px;
+            object-fit: cover;
+            border-radius: 4px;
+            transition: transform 0.2s ease;
+        }
+
+        .streaming-corner img:hover {
+            transform: scale(1.1);
+        }
     </style>
 </head>
 
