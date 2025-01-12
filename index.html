@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Movie Database</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#FF3366',
+                        secondary: '#4FACFE',
+                        accent: '#FFD93D',
+                        success: '#4CAF50',
+                        dark: {
+                            DEFAULT: '#111827',
+                            lighter: '#1F2937',
+                            card: '#374151'
+                        },
+                        light: {
+                            DEFAULT: '#F9FAFB',
+                            darker: '#F3F4F6',
+                            card: '#FFFFFF'
+                        }
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.3s ease-out',
+                        'slide-up': 'slideUp 0.3s ease-out',
+                        'bounce-in': 'bounceIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55)'
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' }
+                        },
+                        slideUp: {
+                            '0%': { transform: 'translateY(20px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' }
+                        },
+                        bounceIn: {
+                            '0%': { transform: 'scale(0.3)', opacity: '0' },
+                            '50%': { transform: 'scale(1.05)' },
+                            '70%': { transform: 'scale(0.9)' },
+                            '100%': { transform: 'scale(1)', opacity: '1' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+
+<body class="bg-gradient-to-br from-gray-900 to-gray-800 text-gray-100 min-h-screen">
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-[60]"
+        style="display: none;">
+        <div class="bg-white/10 backdrop-blur-md p-8 rounded-2xl shadow-2xl text-center">
+            <div class="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
+            <p class="text-lg font-medium text-white/90">Loading...</p>
+        </div>
+    </div>
+
+    <!-- Header with glass morphism -->
+    <header class="relative overflow-hidden bg-gradient-to-r from-primary/20 to-secondary/20">
+        <div class="absolute inset-0 bg-black/20 backdrop-blur-sm"></div>
+        <div class="relative container mx-auto px-4 py-8">
+            <div class="flex justify-between items-center mb-8">
+                <h1 class="logo-text text-4xl font-bold text-white">
+                    <span class="bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary">
+                        Movie Database
+                    </span>
+                </h1>
+                <div class="flex items-center gap-4">
+                    <button id="theme-toggle"
+                        class="p-3 rounded-full hover:bg-white/10 transition-all duration-300 transform hover:scale-110">
+                        <i class="fas fa-moon text-xl text-white"></i>
+                    </button>
+                    <select id="language-select" class="filter-select text-white">
+                        <option value="en-US">English</option>
+                        <option value="es-ES">Español</option>
+                        <option value="fr-FR">Français</option>
+                        <option value="de-DE">Deutsch</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="space-y-6 page-transition">
+                <form id="search-form" class="flex gap-3 justify-center">
+                    <input type="text" id="search-input" class="search-input w-full max-w-xl px-6 py-3 rounded-xl bg-white/10 backdrop-blur-md 
+                                  border border-white/20 focus:outline-none focus:border-primary/50
+                                  text-white placeholder-white/70" placeholder="Search for movies...">
+                    <button type="submit"
+                        class="px-8 py-3 bg-gradient-to-r from-primary to-secondary text-white rounded-xl
+                                   hover:shadow-lg hover:shadow-primary/20 hover:-translate-y-1 transition-all duration-300">
+                        <i class="fas fa-search mr-2"></i>
+                        Search
+                    </button>
+                </form>
+
+                <div class="flex flex-wrap justify-center gap-4">
+                    <select id="genre-select" class="filter-select text-white">
+                        <option value="">All Genres</option>
+                    </select>
+                    <select id="sort-select" class="filter-select text-white">
+                        <option value="popularity.desc">Most Popular</option>
+                        <option value="vote_average.desc">Highest Rated</option>
+                        <option value="release_date.desc">Latest</option>
+                    </select>
+                    <select id="view-mode" class="filter-select text-white">
+                        <option value="grid">Grid View</option>
+                        <option value="list">List View</option>
+                    </select>
+                    <div class="flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-md rounded-lg">
+                        <input type="checkbox" id="infinite-scroll" class="w-4 h-4 accent-primary">
+                        <label for="infinite-scroll" class="text-sm text-white">Infinite Scroll</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-12">
+        <!-- Movie Grid -->
+        <div id="movie-container"
+            class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 animate-fadeIn">
+            <!-- Movies will be loaded here -->
+        </div>
+
+        <!-- Pagination -->
+        <div id="pagination" class="mt-12 flex justify-center gap-2">
+            <!-- Pagination will be populated here -->
+        </div>
+    </main>
+
+    <!-- Updated Modal Structure -->
+    <div id="movie-modal" class="fixed inset-0 z-50 items-center justify-center bg-black/90 backdrop-blur-md"
+        style="display: none;">
+        <div class="container max-w-6xl mx-auto p-4 h-full flex items-center">
+            <div class="modal-content w-full bg-gray-900 rounded-2xl shadow-2xl relative overflow-hidden">
+                <button
+                    class="close absolute top-4 right-4 w-10 h-10 bg-primary hover:bg-primary/80 text-white rounded-full flex items-center justify-center z-10">
+                    <i class="fas fa-times"></i>
+                </button>
+                <div id="modal-details" class="max-h-[85vh] overflow-y-auto p-6">
+                    <!-- Movie details will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
