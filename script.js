@@ -13,7 +13,6 @@ const modalDetails = document.getElementById('modal-details');
 const closeModal = document.querySelector('.close');
 
 // New state variables
-let currentLanguage = 'en-US';
 let isInfiniteScroll = false;
 let isLoading = false;
 
@@ -23,31 +22,35 @@ let currentGenre = '';
 let currentSort = 'popularity.desc';
 let genres = [];
 
-// Theme Toggle
-const themeToggle = document.getElementById('theme-toggle');
-themeToggle.addEventListener('click', toggleTheme);
-
-// Language Selection
-const languageSelect = document.getElementById('language-select');
-languageSelect.addEventListener('change', (e) => {
-    currentLanguage = e.target.value;
-    fetchMovies(1);
-});
-
-// Fetch genres and populate select
+// Update the fetchGenres function
 async function fetchGenres() {
     try {
         const response = await fetch(`${BASE_URL}/genre/movie/list?api_key=${API_KEY}`);
+        if (!response.ok) throw new Error('Failed to fetch genres');
+
         const data = await response.json();
-        genres = data.genres;
-        genres.forEach(genre => {
-            const option = document.createElement('option');
-            option.value = genre.id;
+        const genreOptions = document.querySelector('#genre-select .custom-select-options');
+
+        // Sort genres alphabetically
+        data.genres.sort((a, b) => a.name.localeCompare(b.name));
+
+        // Keep the first "All Genres" option and add new ones
+        genreOptions.innerHTML = '<div class="custom-select-option" data-value="">All Genres</div>';
+
+        data.genres.forEach(genre => {
+            const option = document.createElement('div');
+            option.className = 'custom-select-option';
+            option.dataset.value = genre.id;
             option.textContent = genre.name;
-            genreSelect.appendChild(option);
+            genreOptions.appendChild(option);
         });
+
     } catch (error) {
         console.error('Error fetching genres:', error);
+        const genreSelect = document.getElementById('genre-select');
+        const selectedOption = genreSelect.querySelector('.selected-option');
+        selectedOption.textContent = 'Error loading genres';
+        genreSelect.classList.add('disabled');
     }
 }
 
@@ -71,7 +74,7 @@ async function searchMovies(query) {
     try {
         showLoading();
         const response = await fetch(
-            `${BASE_URL}/search/movie?api_key=${API_KEY}&language=${currentLanguage}&query=${query}&page=${currentPage}`
+            `${BASE_URL}/search/movie?api_key=${API_KEY}&query=${query}&page=${currentPage}`
         );
         const data = await response.json();
         totalPages = data.total_pages;
@@ -111,7 +114,17 @@ async function fetchMovies(page = 1, append = false) {
         }
 
         // Construct and log the movie fetch URL
-        const url = `${BASE_URL}/discover/movie?api_key=${API_KEY}&language=${currentLanguage}&page=${page}&sort_by=${currentSort}${currentGenre ? `&with_genres=${currentGenre}` : ''}`;
+        const filterParams = new URLSearchParams({
+            api_key: API_KEY,
+            page: page,
+            sort_by: currentSort
+        });
+
+        if (currentGenre) {
+            filterParams.append('with_genres', currentGenre);
+        }
+
+        const url = `${BASE_URL}/discover/movie?${filterParams}`;
         console.log('Fetching movies from:', url); // Debug log
 
         const response = await fetch(url);
@@ -161,7 +174,7 @@ function retryFetch() {
 }
 
 // Update displayMovies function to be more resilient
-function displayMovies(movies, append = false) {
+async function displayMovies(movies, append = false) {
     if (!append) {
         movieContainer.innerHTML = '';
     }
@@ -175,38 +188,71 @@ function displayMovies(movies, append = false) {
         return;
     }
 
+    // Fetch all watch providers in parallel
+    const watchProvidersPromises = movies.map(movie =>
+        fetch(`${BASE_URL}/movie/${movie.id}/watch/providers?api_key=${API_KEY}`)
+            .then(res => res.json())
+            .catch(() => ({ results: {} }))
+    );
+
+    const watchProviders = await Promise.all(watchProvidersPromises);
+
     movies.forEach((movie, index) => {
-        if (!movie) return; // Skip invalid movies
+        const providers = watchProviders[index].results?.US || {};
+        const allProviders = {
+            stream: providers.flatrate || [],
+            rent: providers.rent || [],
+            buy: providers.buy || [],
+            free: providers.free || [],
+            ads: providers.ads || []
+        };
 
         const movieCard = document.createElement('div');
-        movieCard.className = 'movie-card bg-light-card dark:bg-dark-card rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transform hover:-translate-y-1 transition-all duration-300 cursor-pointer';
-
-        const posterPath = movie.poster_path
-            ? `${IMAGE_BASE_URL}${movie.poster_path}`
-            : 'https://via.placeholder.com/500x750?text=No+Image';
-
-        const releaseYear = movie.release_date
-            ? new Date(movie.release_date).getFullYear()
-            : 'N/A';
+        movieCard.className = 'movie-card rounded-xl overflow-hidden shadow-lg transition-all duration-300';
 
         movieCard.innerHTML = `
-            <div class="relative aspect-[2/3] overflow-hidden group">
-                <img src="${posterPath}" 
-                     alt="${movie.title || 'Movie poster'}"
-                     class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
-                     loading="lazy"
-                     onerror="this.src='https://via.placeholder.com/500x750?text=Error'">
+            <div class="relative aspect-[2/3] overflow-hidden">
+                <img src="${movie.poster_path ? IMAGE_BASE_URL + movie.poster_path : 'https://via.placeholder.com/500x750?text=No+Image'}" 
+                     alt="${movie.title}"
+                     class="w-full h-full object-cover"
+                     loading="lazy">
                 
-                <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent 
-                            opacity-0 group-hover:opacity-100 transition-opacity duration-300 p-4 flex flex-col justify-end">
-                    <h3 class="text-white text-lg font-semibold">${movie.title || 'Unknown Title'}</h3>
-                    <div class="flex items-center gap-2 text-white/90 mt-2">
-                        <span class="flex items-center">
-                            <i class="fas fa-star text-yellow-400 mr-1"></i>
-                            ${(movie.vote_average || 0).toFixed(1)}
-                        </span>
-                        <span>•</span>
-                        <span>${releaseYear}</span>
+                <div class="movie-card-overlay">
+                    <div class="movie-card-content space-y-2">
+                        <h3 class="text-lg font-semibold text-white line-clamp-2">${movie.title}</h3>
+                        <div class="flex items-center gap-2 text-sm">
+                            <span class="flex items-center bg-black/30 px-2 py-1 rounded-md">
+                                <i class="fas fa-star text-yellow-400 mr-1"></i>
+                                ${(movie.vote_average || 0).toFixed(1)}
+                            </span>
+                            <span class="bg-black/30 px-2 py-1 rounded-md">
+                                ${movie.release_date ? new Date(movie.release_date).getFullYear() : 'N/A'}
+                            </span>
+                        </div>
+                        
+                        <div class="watch-info">
+                            <p class="text-sm font-medium text-white/90 mb-2">Available on:</p>
+                            ${Object.entries(allProviders).map(([type, platforms]) =>
+            platforms.length ? `
+                                    <div class="streaming-section">
+                                        <div class="watch-info-header">
+                                            ${type.charAt(0).toUpperCase() + type.slice(1)}
+                                            ${type === 'free' ? ' (Free)' : type === 'ads' ? ' (With Ads)' : ''}
+                                        </div>
+                                        <div class="streaming-services">
+                                            ${platforms.slice(0, 4).map(platform => `
+                                                <img src="${IMAGE_BASE_URL}${platform.logo_path}"
+                                                     alt="${platform.provider_name}"
+                                                     title="${platform.provider_name}"
+                                                     class="platform-logo">
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                ` : ''
+        ).join('')}
+                            ${!Object.values(allProviders).some(arr => arr.length) ?
+                '<p class="text-sm text-white/70">No streaming information available</p>' : ''}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -218,10 +264,14 @@ function displayMovies(movies, append = false) {
 }
 
 // Updated Modal Functions
-function showMovieDetails(movieId) {
-    const modal = document.getElementById('movie-modal');
+// Add modal state management
+let isModalOpen = false;
 
-    // Reset modal state
+function showMovieDetails(movieId) {
+    if (isModalOpen) return; // Prevent multiple modals
+
+    const modal = document.getElementById('movie-modal');
+    isModalOpen = true;
     modal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
 
@@ -233,7 +283,7 @@ function showMovieDetails(movieId) {
 
 function closeMovieModal() {
     const modal = document.getElementById('movie-modal');
-
+    isModalOpen = false;
     modal.classList.remove('active');
     document.body.style.overflow = '';
 
@@ -243,23 +293,25 @@ function closeMovieModal() {
     }, 300);
 }
 
-// Update event listeners
+// Update modal event listeners
 document.addEventListener('DOMContentLoaded', () => {
     const modal = document.getElementById('movie-modal');
-    const closeBtn = modal.querySelector('.close');
+    const closeBtn = document.querySelector('.modal-close');
 
-    closeBtn.addEventListener('click', (e) => {
+    // Close on button click
+    closeBtn?.addEventListener('click', (e) => {
         e.preventDefault();
-        e.stopPropagation();
         closeMovieModal();
     });
 
-    modal.addEventListener('click', (e) => {
+    // Close on outside click
+    modal?.addEventListener('click', (e) => {
         if (e.target === modal) {
             closeMovieModal();
         }
     });
 
+    // Close on escape key
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && modal.classList.contains('active')) {
             closeMovieModal();
@@ -267,254 +319,308 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
+// Update fetchAndDisplayMovieDetails function
 async function fetchAndDisplayMovieDetails(movieId) {
-    try {
-        modalDetails.innerHTML = ''; // Clear previous content
-        showLoading(); // Use global loading overlay
+    const modalDetails = document.getElementById('modal-details');
+    modalDetails.innerHTML = `<div class="loading-spinner">...</div>`;
 
-        const [movieDetails, credits, videos, similar] = await Promise.all([
-            fetch(`${BASE_URL}/movie/${movieId}?api_key=${API_KEY}&language=${currentLanguage}`).then(res => res.json()),
+    try {
+        // Fetch all movie data in parallel
+        const [movieDetails, credits, videos, watchProviders] = await Promise.all([
+            fetch(`${BASE_URL}/movie/${movieId}?api_key=${API_KEY}`).then(res => res.json()),
             fetch(`${BASE_URL}/movie/${movieId}/credits?api_key=${API_KEY}`).then(res => res.json()),
             fetch(`${BASE_URL}/movie/${movieId}/videos?api_key=${API_KEY}`).then(res => res.json()),
-            fetch(`${BASE_URL}/movie/${movieId}/similar?api_key=${API_KEY}&page=1`).then(res => res.json())
+            fetch(`${BASE_URL}/movie/${movieId}/watch/providers?api_key=${API_KEY}`).then(res => res.json())
         ]);
 
-        // Format data
-        const director = credits.crew.find(person => person.job === 'Director')?.name || 'Unknown';
         const trailer = videos.results.find(video => video.type === 'Trailer') || videos.results[0];
-        const runtime = formatRuntime(movieDetails.runtime);
-        const revenue = formatCurrency(movieDetails.revenue);
-        const budget = formatCurrency(movieDetails.budget);
+        const director = credits.crew.find(person => person.job === 'Director')?.name || 'Unknown';
+        const providers = watchProviders.results?.US || {};
 
-        hideLoading(); // Hide global loading overlay
-
-        // Render movie details with improved layout
         modalDetails.innerHTML = `
-            <div class="movie-details">
-                <!-- Movie poster and quick info -->
-                <div class="movie-poster sticky top-0">
-                    <img src="${IMAGE_BASE_URL}${movieDetails.poster_path}" 
-                         alt="${movieDetails.title}"
-                         class="w-full rounded-xl shadow-lg">
-                    <div class="mt-4 p-4 bg-gray-100 dark:bg-dark-DEFAULT rounded-lg">
-                        <div class="flex items-center justify-between mb-2">
-                            <span class="px-3 py-1 bg-primary/10 text-primary rounded-full">
-                                <i class="fas fa-star text-primary"></i>
-                                ${movieDetails.vote_average.toFixed(1)}
+            <div class="space-y-8">
+                <!-- Movie Header -->
+                <div class="flex flex-col md:flex-row gap-6">
+                    <div class="w-full md:w-1/3">
+                        <img src="${movieDetails.poster_path ? IMAGE_BASE_URL + movieDetails.poster_path : 'placeholder.jpg'}"
+                             class="w-full rounded-xl shadow-2xl" alt="${movieDetails.title}">
+                    </div>
+                    <div class="flex-1 space-y-4">
+                        <h2 class="text-3xl font-bold text-white">${movieDetails.title}</h2>
+                        ${movieDetails.tagline ? `<p class="text-lg text-white/60 italic">${movieDetails.tagline}</p>` : ''}
+                        
+                        <div class="flex flex-wrap gap-3">
+                            <span class="px-3 py-1 bg-white/10 rounded-full text-sm">${movieDetails.release_date.split('-')[0]}</span>
+                            <span class="px-3 py-1 bg-white/10 rounded-full text-sm">${movieDetails.runtime} mins</span>
+                            <span class="px-3 py-1 bg-white/10 rounded-full text-sm">
+                                <i class="fas fa-star text-yellow-500 mr-1"></i>${movieDetails.vote_average.toFixed(1)}
                             </span>
-                            <span class="text-gray-600 dark:text-gray-400">${movieDetails.release_date}</span>
                         </div>
-                        <div class="space-y-1 text-sm text-gray-600 dark:text-gray-400">
-                            <p><i class="fas fa-clock mr-2"></i>${runtime}</p>
-                            <p><i class="fas fa-film mr-2"></i>${movieDetails.original_language.toUpperCase()}</p>
+
+                        <p class="text-white/80 text-lg leading-relaxed">${movieDetails.overview}</p>
+                        
+                        <!-- Streaming Availability -->
+                        <div class="space-y-3">
+                            <h3 class="text-lg font-semibold text-white">Where to Watch</h3>
+                            ${renderStreamingServices(providers)}
                         </div>
                     </div>
                 </div>
 
-                <div class="movie-info space-y-6">
-                    <div>
-                        <h2 class="text-3xl font-bold">${movieDetails.title}</h2>
-                        ${movieDetails.tagline ?
-                `<p class="text-lg text-gray-600 dark:text-gray-400 italic mt-2">${movieDetails.tagline}</p>`
-                : ''}
+                <!-- Trailer Section -->
+                ${trailer ? `
+                    <div class="space-y-4">
+                        <h3 class="text-xl font-semibold text-white">Trailer</h3>
+                        <div class="aspect-video rounded-xl overflow-hidden bg-black/50">
+                            <iframe src="https://www.youtube.com/embed/${trailer.key}"
+                                    class="w-full h-full" frameborder="0" allowfullscreen>
+                            </iframe>
+                        </div>
                     </div>
+                ` : ''}
 
-                    <div class="genre-tags">
-                        ${movieDetails.genres.map(genre => `
-                            <span class="genre-tag">${genre.name}</span>
+                <!-- Cast Section -->
+                <div class="space-y-4">
+                    <h3 class="text-xl font-semibold text-white">Top Cast</h3>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                        ${credits.cast.slice(0, 5).map(actor => `
+                            <div class="text-center space-y-2">
+                                <div class="aspect-[3/4] rounded-lg overflow-hidden bg-black/50">
+                                    <img src="${actor.profile_path ? IMAGE_BASE_URL + actor.profile_path : 'placeholder.jpg'}"
+                                         class="w-full h-full object-cover" alt="${actor.name}">
+                                </div>
+                                <p class="font-medium text-white">${actor.name}</p>
+                                <p class="text-sm text-white/60">${actor.character}</p>
+                            </div>
                         `).join('')}
                     </div>
-
-                    <div class="movie-overview">
-                        <h3 class="text-xl font-semibold mb-2">Overview</h3>
-                        <p class="text-gray-400">${movieDetails.overview}</p>
-                    </div>
-
-                    <div class="grid grid-cols-3 gap-4">
-                        <div class="text-center p-4 bg-black/10 rounded-lg">
-                            <p class="text-sm text-gray-400">Director</p>
-                            <p class="font-semibold">${director}</p>
-                        </div>
-                        <div class="text-center p-4 bg-black/10 rounded-lg">
-                            <p class="text-sm text-gray-400">Budget</p>
-                            <p class="font-semibold">${budget}</p>
-                        </div>
-                        <div class="text-center p-4 bg-black/10 rounded-lg">
-                            <p class="text-sm text-gray-400">Revenue</p>
-                            <p class="font-semibold">${revenue}</p>
-                        </div>
-                    </div>
-
-                    ${credits.cast.length > 0 ? `
-                        <div class="cast-section">
-                            <h3 class="text-xl font-semibold mb-4">Top Cast</h3>
-                            <div class="cast-list">
-                                ${credits.cast.slice(0, 6).map(actor => `
-                                    <div class="cast-member">
-                                        <img src="${actor.profile_path ? IMAGE_BASE_URL + actor.profile_path : 'https://via.placeholder.com/80x80'}"
-                                             alt="${actor.name}">
-                                        <p class="font-semibold">${actor.name}</p>
-                                        <p class="text-sm text-gray-400">${actor.character}</p>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    ` : ''}
-
-                    ${trailer ? `
-                        <div class="trailer-section">
-                            <h3 class="text-xl font-semibold mb-4">Trailer</h3>
-                            <div class="trailer-container">
-                                <iframe src="https://www.youtube.com/embed/${trailer.key}"
-                                        frameborder="0"
-                                        allowfullscreen>
-                                </iframe>
-                            </div>
-                        </div>
-                    ` : ''}
-
-                    ${similar.results.length > 0 ? `
-                        <div class="similar-movies mt-8">
-                            <h3 class="text-xl font-semibold mb-4">Similar Movies</h3>
-                            <div class="similar-grid">
-                                ${similar.results.slice(0, 4).map(movie => `
-                                    <div class="cursor-pointer hover:scale-105 transition-transform"
-                                         onclick="showMovieDetails(${movie.id})">
-                                        <img src="${IMAGE_BASE_URL}${movie.poster_path}"
-                                             alt="${movie.title}"
-                                             class="rounded-lg shadow-lg">
-                                        <p class="mt-2 text-center">${movie.title}</p>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    ` : ''}
                 </div>
             </div>
         `;
 
     } catch (error) {
-        console.error('Error fetching movie details:', error);
-        hideLoading();
-        modalDetails.innerHTML = `
-            <div class="text-center py-8">
-                <i class="fas fa-exclamation-circle text-4xl text-red-500 mb-4"></i>
-                <p class="text-lg mb-4">Sorry, something went wrong loading the movie details.</p>
-                <button onclick="fetchAndDisplayMovieDetails(${movieId})">Try Again</button>
-            </div>
-        `;
+        console.error('Error:', error);
+        modalDetails.innerHTML = `<div class="text-center py-8">Error loading movie details</div>`;
     }
 }
 
-// Utility functions
-function formatRuntime(minutes) {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return `${hours}h ${mins}m`;
+// Add helper function to render streaming services
+function renderStreamingServices(providers) {
+    if (!providers || Object.keys(providers).length === 0) {
+        return '<p class="text-white/60">No streaming information available</p>';
+    }
+
+    const sections = [];
+
+    if (providers.flatrate?.length) {
+        sections.push(`
+            <div class="space-y-2">
+                <h4 class="text-white/80 font-medium">Stream</h4>
+                <div class="flex flex-wrap gap-2">
+                    ${renderProviderLogos(providers.flatrate)}
+                </div>
+            </div>
+        `);
+    }
+
+    if (providers.rent?.length) {
+        sections.push(`
+            <div class="space-y-2">
+                <h4 class="text-white/80 font-medium">Rent</h4>
+                <div class="flex flex-wrap gap-2">
+                    ${renderProviderLogos(providers.rent)}
+                </div>
+            </div>
+        `);
+    }
+
+    if (providers.buy?.length) {
+        sections.push(`
+            <div class="space-y-2">
+                <h4 class="text-white/80 font-medium">Buy</h4>
+                <div class="flex flex-wrap gap-2">
+                    ${renderProviderLogos(providers.buy)}
+                </div>
+            </div>
+        `);
+    }
+
+    return sections.length ? `<div class="space-y-4">${sections.join('')}</div>`
+        : '<p class="text-white/60">No streaming information available</p>';
 }
 
-function formatCurrency(amount) {
-    return amount ? new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
-        maximumFractionDigits: 0
-    }).format(amount) : 'N/A';
+function renderProviderLogos(providers) {
+    return providers.map(provider => `
+        <div class="w-10 h-10 rounded-lg overflow-hidden bg-white/5 tooltip" title="${provider.provider_name}">
+            <img src="${IMAGE_BASE_URL}${provider.logo_path}" 
+                 class="w-full h-full object-cover"
+                 alt="${provider.provider_name}">
+        </div>
+    `).join('');
 }
 
-function getRatingClass(rating) {
-    if (rating >= 8) return 'high';
-    if (rating >= 6) return 'medium';
-    return 'low';
+// Add debounce function
+function debounce(func, wait) {
+    let timeout;
+    return function (...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+    };
 }
 
-function animateModalContent() {
-    const elements = modalDetails.querySelectorAll('.movie-details > *, .cast-member');
-    elements.forEach((el, index) => {
-        el.style.opacity = '0';
-        el.style.transform = 'translateY(20px)';
-        requestAnimationFrame(() => {
-            el.style.transition = 'all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)';
-            el.style.transitionDelay = `${index * 50}ms`;
-            el.style.opacity = '1';
-            el.style.transform = 'translateY(0)';
-        });
-    });
-}
+// Simplified search functionality
+const handleSearchInput = debounce(async (event) => {
+    const query = event.target.value.trim();
+    setLoadingState(true);
 
-// Update pagination display
+    try {
+        if (query.length === 0) {
+            currentPage = 1;
+            await fetchMovies(1);
+            return;
+        }
+
+        if (query.length >= 2) {
+            const response = await fetch(
+                `${BASE_URL}/search/movie?api_key=${API_KEY}&query=${query}&page=1`
+            );
+            const data = await response.json();
+
+            if (data.results.length > 0) {
+                totalPages = data.total_pages;
+                await displayMovies(data.results);
+                displayPagination();
+            } else {
+                movieContainer.innerHTML = `
+                    <div class="col-span-full text-center py-10">
+                        <p class="text-lg">No results found for "${query}"</p>
+                    </div>
+                `;
+                paginationContainer.innerHTML = '';
+            }
+        }
+    } catch (error) {
+        console.error('Error searching movies:', error);
+    } finally {
+        setLoadingState(false);
+    }
+}, 500);
+
+// Remove suggestion-related event listeners and keep only the search input listener
+searchInput.addEventListener('input', handleSearchInput);
+
+// Remove handleSuggestionClick function as it's no longer needed
+
+// Update the remaining event listeners
+searchForm.addEventListener('submit', (e) => {
+    e.preventDefault(); // Prevent form submission as we're handling search dynamically
+});
+
+// Update pagination functions
 function displayPagination() {
-    if (totalPages <= 1) return;
+    if (totalPages <= 1) {
+        paginationContainer.innerHTML = '';
+        return;
+    }
 
-    paginationContainer.innerHTML = `
-        <div class="flex gap-2 flex-wrap justify-center">
-            ${currentPage > 1 ? `
-                <button onclick="changePage(${currentPage - 1})" 
-                        class="px-4 py-2 rounded-lg bg-light-card dark:bg-dark-card hover:bg-primary hover:text-white transition-colors">
-                    Previous
-                </button>
-            ` : ''}
-            ${generatePageNumbers()}
-            ${currentPage < totalPages ? `
-                <button onclick="changePage(${currentPage + 1})"
-                        class="px-4 py-2 rounded-lg bg-light-card dark:bg-dark-card hover:bg-primary hover:text-white transition-colors">
-                    Next
-                </button>
-            ` : ''}
+    const paginationHTML = `
+        <div class="inline-flex items-center gap-2 bg-gray-900/50 backdrop-blur-sm px-4 py-2 rounded-lg border border-white/10">
+            ${generatePaginationButtons()}
         </div>
     `;
+
+    paginationContainer.innerHTML = paginationHTML;
 }
 
-function generatePageNumbers() {
-    const maxButtons = 5;
-    const start = Math.max(1, currentPage - 2);
-    const end = Math.min(totalPages, start + maxButtons - 1);
+function generatePaginationButtons() {
+    const maxVisibleButtons = 5;
+    let buttons = [];
 
-    return Array.from({ length: end - start + 1 }, (_, i) => start + i)
-        .map(num => `
-            <button onclick="changePage(${num})"
-                    class="px-4 py-2 rounded-lg ${num === currentPage
-                ? 'bg-primary text-white'
-                : 'bg-light-card dark:bg-dark-card hover:bg-primary hover:text-white'} 
-                    transition-colors">
-                ${num}
+    // Always show first page button
+    if (currentPage > 1) {
+        buttons.push(`
+            <button onclick="changePage(1)" 
+                    class="w-10 h-10 flex items-center justify-center rounded-lg
+                           text-white/70 hover:text-primary hover:bg-white/5 transition-colors">
+                <i class="fas fa-angle-double-left"></i>
             </button>
-        `).join('');
-}
-
-function changePage(page) {
-    currentPage = page;
-    fetchMovies(page);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-// Infinite Scroll
-const infiniteScrollToggle = document.getElementById('infinite-scroll');
-if (infiniteScrollToggle) {
-    infiniteScrollToggle.addEventListener('change', (e) => {
-        isInfiniteScroll = e.target.checked;
-    });
-}
-
-window.addEventListener('scroll', () => {
-    if (!isInfiniteScroll || isLoading) return;
-
-    const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
-    if (scrollTop + clientHeight >= scrollHeight - 5) {
-        if (currentPage < totalPages) {
-            isLoading = true;
-            currentPage++;
-            fetchMovies(currentPage, true);
-        }
+            <button onclick="changePage(${currentPage - 1})" 
+                    class="w-10 h-10 flex items-center justify-center rounded-lg
+                           text-white/70 hover:text-primary hover:bg-white/5 transition-colors">
+                <i class="fas fa-angle-left"></i>
+            </button>
+        `);
     }
+
+    // Calculate visible page range
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisibleButtons / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisibleButtons - 1);
+
+    // Adjust start if we're near the end
+    if (endPage - startPage + 1 < maxVisibleButtons) {
+        startPage = Math.max(1, endPage - maxVisibleButtons + 1);
+    }
+
+    // Add page numbers
+    for (let i = startPage; i <= endPage; i++) {
+        buttons.push(`
+            <button onclick="changePage(${i})" 
+                    class="w-10 h-10 flex items-center justify-center rounded-lg
+                           ${i === currentPage
+                ? 'bg-primary text-white'
+                : 'text-white/70 hover:text-primary hover:bg-white/5'} 
+                           transition-colors">
+                ${i}
+            </button>
+        `);
+    }
+
+    // Always show last page button
+    if (currentPage < totalPages) {
+        buttons.push(`
+            <button onclick="changePage(${currentPage + 1})" 
+                    class="w-10 h-10 flex items-center justify-center rounded-lg
+                           text-white/70 hover:text-primary hover:bg-white/5 transition-colors">
+                <i class="fas fa-angle-right"></i>
+            </button>
+            <button onclick="changePage(${totalPages})" 
+                    class="w-10 h-10 flex items-center justify-center rounded-lg
+                           text-white/70 hover:text-primary hover:bg-white/5 transition-colors">
+                <i class="fas fa-angle-double-right"></i>
+            </button>
+        `);
+    }
+
+    return buttons.join('');
+}
+
+async function changePage(page) {
+    if (page === currentPage) return;
+
+    setLoadingState(true);
+    currentPage = page;
+
+    try {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        const searchQuery = searchInput.value.trim();
+
+        if (searchQuery.length >= 2) {
+            await searchMovies(searchQuery);
+        } else {
+            await fetchMovies(page);
+        }
+    } catch (error) {
+        console.error('Error changing page:', error);
+    } finally {
+        setLoadingState(false);
+    }
+}
+
+// Update event listeners
+searchForm.addEventListener('submit', (e) => {
+    e.preventDefault(); // Prevent form submission as we're handling search dynamically
 });
 
-// View Mode Toggle
-const viewModeSelect = document.getElementById('view-mode');
-viewModeSelect.addEventListener('change', (e) => {
-    movieContainer.className = `movie-container ${e.target.value}-view`;
-});
-
-// Event listeners
 searchForm.addEventListener('submit', (e) => {
     e.preventDefault();
     const searchTerm = searchInput.value.trim();
@@ -523,16 +629,24 @@ searchForm.addEventListener('submit', (e) => {
     }
 });
 
-genreSelect.addEventListener('change', (e) => {
+// Update genre select event listener
+document.getElementById('genre-select').addEventListener('change', async (e) => {
     currentGenre = e.target.value;
     currentPage = 1;
-    fetchMovies();
+    await fetchMovies(1);
 });
 
-sortSelect.addEventListener('change', (e) => {
+sortSelect.addEventListener('change', async (e) => {
     currentSort = e.target.value;
     currentPage = 1;
-    fetchMovies();
+    setLoadingState(true);
+
+    try {
+        await fetchMovies(1);
+        movieContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } finally {
+        setLoadingState(false);
+    }
 });
 
 closeModal.addEventListener('click', closeMovieModal);
@@ -542,27 +656,64 @@ window.addEventListener('click', (e) => {
     }
 });
 
-// Update initialization
+searchInput.addEventListener('input', handleSearchInput);
+document.addEventListener('click', (e) => {
+    if (!searchInput.contains(e.target) && !searchSuggestions.contains(e.target)) {
+        searchSuggestions.classList.add('hidden');
+    }
+});
+
+// Add animation when changing selections
+function animateSelection(element) {
+    element.classList.add('scale-105');
+    setTimeout(() => element.classList.remove('scale-105'), 150);
+}
+
+// Add visual feedback for selections
+[genreSelect, sortSelect].forEach(select => {
+    select.addEventListener('change', () => animateSelection(select));
+
+    // Add focus styles
+    select.addEventListener('focus', () => {
+        select.parentElement.classList.add('ring-2', 'ring-primary/50');
+    });
+
+    select.addEventListener('blur', () => {
+        select.parentElement.classList.remove('ring-2', 'ring-primary/50');
+    });
+});
+
+// Add reset filters function
+function resetFilters() {
+    currentGenre = '';
+    currentSort = 'popularity.desc';
+    currentPage = 1;
+
+    // Reset select elements
+    genreSelect.value = '';
+    sortSelect.value = 'popularity.desc';
+
+    // Fetch movies with reset filters
+    fetchMovies(1);
+}
+
+// Update initialization to prevent auto-opening modal
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         showLoading();
-        console.log('Initializing with API key:', API_KEY ? 'Present' : 'Missing'); // Debug log
 
-        // Verify API key and connection
-        const testUrl = `${BASE_URL}/configuration?api_key=${API_KEY}`;
-        const testResponse = await fetch(testUrl);
-        if (!testResponse.ok) {
-            throw new Error('Failed to connect to TMDB API');
-        }
+        // Ensure modal is closed on page load
+        const modal = document.getElementById('movie-modal');
+        modal.style.display = 'none';
+        modal.classList.remove('active');
+        isModalOpen = false;
 
-        // Set theme and continue initialization
-        const savedTheme = localStorage.getItem('theme') || 'dark';
-        document.documentElement.setAttribute('data-theme', savedTheme);
-        document.body.classList.toggle('dark', savedTheme === 'dark');
-        themeToggle.innerHTML = `<i class="fas fa-${savedTheme === 'dark' ? 'moon' : 'sun'}"></i>`;
-
+        // Initialize genres and fetch movies
         await fetchGenres();
         await fetchMovies();
+
+        // Setup enhanced dropdown functionality
+        setupDropdowns();
     } catch (error) {
         console.error('Initialization error:', error);
         movieContainer.innerHTML = `
@@ -577,41 +728,162 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-// Update theme toggle function
-function toggleTheme() {
-    const html = document.documentElement;
-    const isDark = html.getAttribute('data-theme') === 'dark';
-    const newTheme = isDark ? 'light' : 'dark';
+// Update setupDropdowns function
+function setupDropdowns() {
+    const dropdowns = document.querySelectorAll('.select-wrapper');
 
-    // Add transition class to body
-    document.body.classList.add('transitioning');
+    dropdowns.forEach(dropdown => {
+        const select = dropdown.querySelector('select');
+        const icon = dropdown.querySelector('.select-icon');
 
-    // Toggle theme with enhanced animation
-    requestAnimationFrame(() => {
-        html.setAttribute('data-theme', newTheme);
-        document.body.classList.toggle('dark', !isDark);
-        localStorage.setItem('theme', newTheme);
+        // Add focus and change handlers
+        select.addEventListener('focus', () => {
+            dropdown.classList.add('focused');
+            icon.style.transform = 'translateY(-50%) rotate(180deg)';
+        });
 
-        // Animate icon
-        const icon = themeToggle.querySelector('i');
-        icon.style.transform = 'scale(0) rotate(180deg)';
+        select.addEventListener('blur', () => {
+            dropdown.classList.remove('focused');
+            icon.style.transform = 'translateY(-50%) rotate(0deg)';
+        });
 
-        setTimeout(() => {
-            icon.className = `fas fa-${isDark ? 'sun' : 'moon'}`;
-            icon.style.transform = 'scale(1) rotate(0)';
-        }, 150);
+        select.addEventListener('change', () => {
+            // Animate icon
+            icon.style.transform = 'translateY(-50%) rotate(180deg)';
+            setTimeout(() => {
+                icon.style.transform = 'translateY(-50%) rotate(0deg)';
+            }, 200);
+
+            // Add visual feedback
+            dropdown.classList.add('selected');
+            select.blur(); // Remove focus to prevent default browser outline
+        });
     });
-
-    // Remove transition class
-    setTimeout(() => {
-        document.body.classList.remove('transitioning');
-    }, 300);
 }
 
-// Add smooth scroll behavior
-document.documentElement.style.scrollBehavior = 'smooth';
+// Add dropdown enhancement
+function setupDropdowns() {
+    const dropdowns = document.querySelectorAll('.select-wrapper');
 
-// Initialize animations on page load
+    dropdowns.forEach(dropdown => {
+        const select = dropdown.querySelector('select');
+        const icon = dropdown.querySelector('.select-icon');
+
+        select.addEventListener('change', () => {
+            icon.style.transform = 'translateY(-50%) rotate(180deg)';
+            setTimeout(() => {
+                icon.style.transform = 'translateY(-50%) rotate(0deg)';
+            }, 200);
+        });
+
+        // Add focus effects
+        select.addEventListener('focus', () => {
+            dropdown.classList.add('focused');
+        });
+
+        select.addEventListener('blur', () => {
+            dropdown.classList.remove('focused');
+        });
+    });
+}
+
+// Add loading state functions
+function setLoadingState(loading = true) {
+    const container = document.getElementById('movie-container');
+    const pagination = document.getElementById('pagination');
+
+    if (loading) {
+        container.classList.add('opacity-50', 'pointer-events-none');
+        pagination.classList.add('opacity-50', 'pointer-events-none');
+
+        // Add loading overlay to container
+        container.innerHTML = `
+            <div class="col-span-full flex items-center justify-center min-h-[400px]">
+                <div class="loading-spinner">
+                    <div class="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                    <p class="mt-4 text-white/80">Fetching movies...</p>
+                </div>
+            </div>
+        `;
+    } else {
+        container.classList.remove('opacity-50', 'pointer-events-none');
+        pagination.classList.remove('opacity-50', 'pointer-events-none');
+    }
+}
+
+// Custom Select Implementation
+function initializeCustomSelects() {
+    document.querySelectorAll('.custom-select').forEach(select => {
+        const options = select.querySelector('.custom-select-options');
+        const selectedOption = select.querySelector('.selected-option');
+
+        // Toggle options visibility
+        select.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isActive = select.classList.contains('active');
+
+            // Close all other select dropdowns
+            document.querySelectorAll('.custom-select.active').forEach(activeSelect => {
+                if (activeSelect !== select) {
+                    activeSelect.classList.remove('active');
+                }
+            });
+
+            select.classList.toggle('active');
+        });
+
+        // Handle option selection
+        options.querySelectorAll('.custom-select-option').forEach(option => {
+            option.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectedOption.textContent = option.textContent;
+                select.classList.remove('active');
+
+                // Trigger change event
+                const changeEvent = new CustomEvent('change', {
+                    detail: { value: option.dataset.value }
+                });
+                select.dispatchEvent(changeEvent);
+            });
+        });
+    });
+
+    // Close all selects when clicking outside
+    document.addEventListener('click', () => {
+        document.querySelectorAll('.custom-select.active').forEach(select => {
+            select.classList.remove('active');
+        });
+    });
+}
+
+// Update your existing event listeners
 document.addEventListener('DOMContentLoaded', () => {
-    document.body.classList.add('animate-fadeIn');
+    initializeCustomSelects();
+
+    // Add change event listeners for the custom selects
+    document.getElementById('genre-select').addEventListener('change', (e) => {
+        currentGenre = e.detail.value;
+        currentPage = 1;
+        fetchMovies();
+    });
+
+    document.getElementById('sort-select').addEventListener('change', (e) => {
+        currentSort = e.detail.value;
+        currentPage = 1;
+        fetchMovies();
+    });
+
+    // ...rest of your existing DOMContentLoaded code...
 });
+
+// Update your populateGenres function to work with custom select
+function populateGenres(genres) {
+    const genreOptions = document.querySelector('#genre-select .custom-select-options');
+    genres.forEach(genre => {
+        const option = document.createElement('div');
+        option.className = 'custom-select-option';
+        option.dataset.value = genre.id;
+        option.textContent = genre.name;
+        genreOptions.appendChild(option);
+    });
+}
