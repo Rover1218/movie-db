@@ -908,3 +908,243 @@ function populateGenres(genres) {
         genreOptions.appendChild(option);
     });
 }
+
+// Initialize custom selects
+function initializeCustomSelects() {
+    const genreSelect = document.querySelector('#genre-select');
+    const sortSelect = document.querySelector('#sort-select');
+
+    if (genreSelect) {
+        initializeSelect(genreSelect, async (value, text) => {
+            currentGenre = value;
+            currentPage = 1;
+            await fetchAndDisplayMovies();
+        });
+    }
+
+    if (sortSelect) {
+        initializeSelect(sortSelect, async (value, text) => {
+            currentSort = value;
+            currentPage = 1;
+            await fetchAndDisplayMovies();
+        });
+    }
+}
+
+function initializeSelect(selectElement, onChangeCallback) {
+    const options = selectElement.querySelector('.custom-select-options');
+    const selectedOption = selectElement.querySelector('.selected-option');
+
+    // Toggle options
+    selectElement.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isActive = selectElement.classList.contains('active');
+
+        // Close all other selects
+        document.querySelectorAll('.custom-select.active').forEach(select => {
+            if (select !== selectElement) {
+                select.classList.remove('active');
+            }
+        });
+
+        selectElement.classList.toggle('active');
+    });
+
+    // Handle option selection
+    options.addEventListener('click', (e) => {
+        const option = e.target.closest('.custom-select-option');
+        if (!option) return;
+
+        const value = option.dataset.value;
+        const text = option.textContent;
+
+        selectedOption.textContent = text;
+        selectElement.classList.remove('active');
+
+        onChangeCallback(value, text);
+    });
+}
+
+// Fetch genres and populate select
+async function fetchAndPopulateGenres() {
+    try {
+        const response = await fetch(`${BASE_URL}/genre/movie/list?api_key=${API_KEY}`);
+        const data = await response.json();
+
+        const genreOptions = document.querySelector('#genre-select .custom-select-options');
+        genreOptions.innerHTML = '<div class="custom-select-option" data-value="">All Genres</div>';
+
+        data.genres.sort((a, b) => a.name.localeCompare(b.name)).forEach(genre => {
+            genreOptions.innerHTML += `
+                <div class="custom-select-option" data-value="${genre.id}">
+                    ${genre.name}
+                </div>
+            `;
+        });
+    } catch (error) {
+        console.error('Error fetching genres:', error);
+    }
+}
+
+// Fetch and display movies
+async function fetchAndDisplayMovies() {
+    if (isLoading) return;
+    showLoading();
+
+    try {
+        const params = new URLSearchParams({
+            api_key: API_KEY,
+            language: 'en-US',
+            page: currentPage,
+            sort_by: currentSort
+        });
+
+        if (currentGenre) {
+            params.append('with_genres', currentGenre);
+        }
+
+        const endpoint = searchInput.value.trim()
+            ? `/search/movie?query=${searchInput.value}&${params}`
+            : `/discover/movie?${params}`;
+
+        const response = await fetch(`${BASE_URL}${endpoint}`);
+        const data = await response.json();
+
+        totalPages = data.total_pages;
+        await displayMovies(data.results);
+        displayPagination();
+
+    } catch (error) {
+        console.error('Error:', error);
+        showError('Failed to fetch movies');
+    } finally {
+        hideLoading();
+    }
+}
+
+// Update event listeners
+document.addEventListener('DOMContentLoaded', async () => {
+    await fetchAndPopulateGenres();
+    initializeCustomSelects();
+
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', () => {
+        document.querySelectorAll('.custom-select.active').forEach(select => {
+            select.classList.remove('active');
+        });
+    });
+
+    // Initialize search
+    const searchForm = document.getElementById('search-form');
+    const searchInput = document.getElementById('search-input');
+
+    searchForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        currentPage = 1;
+        fetchAndDisplayMovies();
+    });
+
+    searchInput.addEventListener('input', debounce(() => {
+        currentPage = 1;
+        fetchAndDisplayMovies();
+    }, 500));
+
+    // Initial load
+    await fetchAndDisplayMovies();
+});
+
+// Update the custom select initialization
+function initializeCustomSelects() {
+    document.querySelectorAll('.custom-select').forEach(select => {
+        const selectedOption = select.querySelector('.selected-option');
+        const options = select.querySelector('.custom-select-options');
+        const chevron = select.querySelector('.fa-chevron-down');
+
+        // Toggle dropdown
+        selectedOption.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const wasActive = select.classList.contains('active');
+
+            // Close all other dropdowns
+            document.querySelectorAll('.custom-select.active').forEach(activeSelect => {
+                activeSelect.classList.remove('active');
+                activeSelect.querySelector('.fa-chevron-down').style.transform = 'translateY(-50%) rotate(0deg)';
+            });
+
+            // Toggle current dropdown
+            select.classList.toggle('active');
+            if (chevron) {
+                chevron.style.transform = wasActive
+                    ? 'translateY(-50%) rotate(0deg)'
+                    : 'translateY(-50%) rotate(180deg)';
+            }
+        });
+
+        // Handle option selection
+        options.addEventListener('click', (e) => {
+            const option = e.target.closest('.custom-select-option');
+            if (!option) return;
+
+            selectedOption.textContent = option.textContent;
+            select.classList.remove('active');
+            if (chevron) {
+                chevron.style.transform = 'translateY(-50%) rotate(0deg)';
+            }
+
+            // Handle selection change
+            const value = option.dataset.value;
+            if (select.id === 'genre-select') {
+                currentGenre = value;
+            } else if (select.id === 'sort-select') {
+                currentSort = value;
+            }
+            currentPage = 1;
+            fetchMovies();
+        });
+    });
+
+    // Close dropdowns when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.custom-select')) {
+            document.querySelectorAll('.custom-select.active').forEach(select => {
+                select.classList.remove('active');
+                const chevron = select.querySelector('.fa-chevron-down');
+                if (chevron) {
+                    chevron.style.transform = 'translateY(-50%) rotate(0deg)';
+                }
+            });
+        }
+    });
+}
+
+// Update the fetchGenres function
+async function fetchGenres() {
+    try {
+        const response = await fetch(`${BASE_URL}/genre/movie/list?api_key=${API_KEY}`);
+        const data = await response.json();
+        const genreOptions = document.querySelector('#genre-select .custom-select-options');
+
+        // Clear existing options
+        genreOptions.innerHTML = '<div class="custom-select-option" data-value="">All Genres</div>';
+
+        // Add genre options
+        data.genres
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .forEach(genre => {
+                genreOptions.innerHTML += `
+                    <div class="custom-select-option" data-value="${genre.id}">
+                        ${genre.name}
+                    </div>
+                `;
+            });
+    } catch (error) {
+        console.error('Error fetching genres:', error);
+    }
+}
+
+// Update DOMContentLoaded event listener
+document.addEventListener('DOMContentLoaded', async () => {
+    await fetchGenres();
+    initializeCustomSelects();
+    await fetchMovies();
+});
